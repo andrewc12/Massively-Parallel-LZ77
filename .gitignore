@@ -47,3 +47,9 @@
 *.ptx
 *.cubin
 *.fatbin
+
+# Ignore executables
+pdecoder
+pencoder
+sencoder
+sdecoder
