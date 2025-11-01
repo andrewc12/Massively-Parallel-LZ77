@@ -36,7 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdlib>
 #include <cstdio>
 #include <cassert>
-#include <sys/time.h>
+#include <chrono>  // Changed from sys/time.h
 
 typedef unsigned char byte;
 
@@ -67,9 +67,8 @@ int main(int argc, char* argv[])
   triple* const output = new triple [insize];  // upper bound
   long outsize = 0;
   
-  // Timer
-  timeval start, end;
-  gettimeofday(&start, NULL);
+  // Timer - Updated for cross-platform compatibility
+  auto start = std::chrono::high_resolution_clock::now();
   
   //1. Iterate through input
   long cur = 0;
@@ -109,8 +108,9 @@ int main(int argc, char* argv[])
     }
     outsize++;
   }
-  gettimeofday(&end, NULL);
-  printf("CPU runtime: %.6f s\n", end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  printf("CPU runtime: %.6f s\n", elapsed.count());
 
   // Write output
   FILE* const fout = fopen(argv[2], "wb");  assert(fout != NULL);

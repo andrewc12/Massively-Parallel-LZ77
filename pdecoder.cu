@@ -37,7 +37,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdio>
 #include <cassert>
 #include <cuda.h>
-#include <sys/time.h>
+#include <chrono>  // Changed from sys/time.h
+
+// Windows compatibility
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <cub/device/device_scan.cuh>
 
 #define mallocOnGPU(addr, size) if (cudaSuccess != cudaMalloc((void **)&addr, size)) fprintf(stderr, "ERROR: could not allocate GPU memory\n");  CudaTest("couldn't allocate GPU memory");
@@ -174,9 +180,8 @@ int main(int argc, char* argv[])
   byte* d_output;
   mallocOnGPU(d_output, sizeof(byte) * origLength);  
   
-  //Timer start_total
-  timeval start, end, start_total, end_total;
-  gettimeofday(&start_total, NULL);
+  // Timer start_total - Using chrono for cross-platform timing
+  auto start_total = std::chrono::high_resolution_clock::now();
   
   // Initialize variables
   copyToGPU(d_input, input, sizeof(triple) * setSize);
@@ -185,7 +190,7 @@ int main(int argc, char* argv[])
   void *d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
   
-  gettimeofday(&start, NULL);
+  auto start = std::chrono::high_resolution_clock::now();
   // 2. Populate prefix sum array
   prefixSumPopulate<<<(insize + ThreadsPerBlock - 1) / ThreadsPerBlock, ThreadsPerBlock>>>(d_prefix, d_input, insize);
   // 3. Compute prefix sum array - https://nvlabs.github.io/cub/structcub_1_1_device_scan.html
@@ -201,16 +206,18 @@ int main(int argc, char* argv[])
   populateOuput<<<(origLength + ThreadsPerBlock - 1) / ThreadsPerBlock, ThreadsPerBlock>>>(d_output, d_parent, origLength);
 
   cudaDeviceSynchronize();
-  gettimeofday(&end, NULL);
-  printf("GPU runtime: %.6f s\n", end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  printf("GPU runtime:   %.6f s\n", elapsed.count());
 
   // Get result from GPU
   //CheckCuda();
   copyFromGPU(output, d_output, sizeof(byte) * origLength);
   
-  //Timer stop_total
-  gettimeofday(&end_total, NULL);
-  printf("Total runtime: %.6f s\n", end_total.tv_sec - start_total.tv_sec + (end_total.tv_usec - start_total.tv_usec) / 1000000.0);
+  // Timer stop_total
+  auto end_total = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed_total = end_total - start_total;
+  printf("Total runtime: %.6f s\n", elapsed_total.count());
   
   // 6. Write output
   FILE* const fout = fopen(argv[2], "wb");  assert(fout != NULL);
