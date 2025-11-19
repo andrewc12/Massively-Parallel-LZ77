@@ -38,12 +38,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdio>
 #include <cstdlib>
 #include <cub/device/device_scan.cuh>
-#include <utility>
-
-// Windows compatibility
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 #define mallocOnGPU(addr, size)                                                \
   if (cudaSuccess != cudaMalloc((void **)&addr, size))                         \
