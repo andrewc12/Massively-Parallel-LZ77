@@ -33,9 +33,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <cstdlib>
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <sys/time.h>
 
 typedef unsigned char byte;
@@ -43,14 +43,13 @@ typedef unsigned char byte;
 static const long offset = 256;
 
 struct triple {
-  byte dis; //distance to match
-  byte len; //match length
-  byte val; //next value
+  byte dis; // distance to match
+  byte len; // match length
+  byte val; // next value
 };
 
 // Find operation
-static inline long find(const long idx, long* const parent)
-{
+static inline long find(const long idx, long *const parent) {
   long curr = parent[idx];
   if (parent[curr] >= offset) {
     long next, prev = idx;
@@ -64,27 +63,36 @@ static inline long find(const long idx, long* const parent)
   return curr;
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   printf("LZ77 (%s)\n", __FILE__);
 
-  if (argc != 3) {printf("USAGE: %s input_file_name output_file_name\n", argv[0]);  exit(-1);}
+  if (argc != 3) {
+    printf("USAGE: %s input_file_name output_file_name\n", argv[0]);
+    exit(-1);
+  }
 
   // 1. Read input
-  FILE* const fin = fopen(argv[1], "rb");  assert(fin != NULL);
+  FILE *const fin = fopen(argv[1], "rb");
+  assert(fin != NULL);
   fseek(fin, 0, SEEK_END);
-  long size = ftell(fin);  assert(size > 0);
+  long size = ftell(fin);
+  assert(size > 0);
   long setSize = (size - sizeof(long)) / sizeof(triple);
-  triple* const input = new triple [setSize];
+  triple *const input = new triple[setSize];
   fseek(fin, 0, SEEK_SET);
   long origLength;
-  long readElms = fread(&origLength, sizeof(long), 1, fin); assert(readElms == 1);
-  const long insize = fread(input, (long)sizeof(triple), setSize, fin);  assert(insize == setSize);
+  long readElms = fread(&origLength, sizeof(long), 1, fin);
+  assert(readElms == 1);
+  const long insize = fread(input, (long)sizeof(triple), setSize, fin);
+  assert(insize == setSize);
   fclose(fin);
-  if (insize == 0) {printf("ERROR: input file is empty\n");  exit(-1);}
+  if (insize == 0) {
+    printf("ERROR: input file is empty\n");
+    exit(-1);
+  }
 
   // Create prefix array
-  long* prefix = new long [insize];
+  long *prefix = new long[insize];
 
   timeval start, end;
   gettimeofday(&start, NULL);
@@ -93,10 +101,9 @@ int main(int argc, char* argv[])
   for (long cur = 0; cur < insize; cur++) {
     if (input[cur].dis == 0) {
       prefix[cur] = 2;
-    }
-    else {
+    } else {
       prefix[cur] = (int)input[cur].len + 2 + 1;
-    } 
+    }
   }
 
   // 3. Compute prefix sum array
@@ -105,9 +112,9 @@ int main(int argc, char* argv[])
   }
 
   // Create parent array
-  long* parent = new long [origLength + offset];  
+  long *parent = new long[origLength + offset];
   // Create output array
-  byte* const output = new byte [origLength];
+  byte *const output = new byte[origLength];
 
   // 4. Use prefix sum to populate parent array
   for (long i = 0; i < insize; i++) {
@@ -127,24 +134,26 @@ int main(int argc, char* argv[])
   for (long i = offset; i < origLength + offset; i++) {
     if (parent[i] < offset) {
       output[i - offset] = parent[i];
-    }
-    else {
+    } else {
       const long parentIndex = find(i, parent);
       output[i - offset] = parent[parentIndex];
     }
   }
   gettimeofday(&end, NULL);
-  printf("CPU runtime: %.6f s\n", end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
+  printf("CPU runtime: %.6f s\n",
+         end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
 
   // Write output
-  FILE* const fout = fopen(argv[2], "wb");  assert(fout != NULL);
-  size = fwrite(output, sizeof(byte), origLength, fout);  assert(size == origLength);
+  FILE *const fout = fopen(argv[2], "wb");
+  assert(fout != NULL);
+  size = fwrite(output, sizeof(byte), origLength, fout);
+  assert(size == origLength);
   fclose(fout);
 
   // Clean up
-  delete [] input;
-  delete [] output;
-  delete [] parent;
-  delete [] prefix;
+  delete[] input;
+  delete[] output;
+  delete[] parent;
+  delete[] prefix;
   return 0;
 }

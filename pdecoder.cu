@@ -33,19 +33,27 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <cstdlib>
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <cub/device/device_scan.cuh>
 #include <cuda.h>
 #include <sys/time.h>
-#include <cub/device/device_scan.cuh>
 
-#define mallocOnGPU(addr, size) if (cudaSuccess != cudaMalloc((void **)&addr, size)) fprintf(stderr, "ERROR: could not allocate GPU memory\n");  CudaTest("couldn't allocate GPU memory");
-#define copyToGPU(dst, src, size) if (cudaSuccess != cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice)) fprintf(stderr, "ERROR: copying of data to device failed\n");  CudaTest("data copy to device failed");
-#define copyFromGPU(dst, src, size) if (cudaSuccess != cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost)) fprintf(stderr, "ERROR: copying of data from device failed\n");  CudaTest("data copy from device failed");
+#define mallocOnGPU(addr, size)                                                \
+  if (cudaSuccess != cudaMalloc((void **)&addr, size))                         \
+    fprintf(stderr, "ERROR: could not allocate GPU memory\n");                 \
+  CudaTest("couldn't allocate GPU memory");
+#define copyToGPU(dst, src, size)                                              \
+  if (cudaSuccess != cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice))       \
+    fprintf(stderr, "ERROR: copying of data to device failed\n");              \
+  CudaTest("data copy to device failed");
+#define copyFromGPU(dst, src, size)                                            \
+  if (cudaSuccess != cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost))       \
+    fprintf(stderr, "ERROR: copying of data from device failed\n");            \
+  CudaTest("data copy from device failed");
 
-static void CudaTest(const char* msg)
-{
+static void CudaTest(const char *msg) {
   cudaError_t e;
 
   cudaDeviceSynchronize();
@@ -62,13 +70,14 @@ static const int offset = 256;
 static const int ThreadsPerBlock = 512;
 
 struct triple {
-  byte dis; //distance to match
-  byte len; //match length
-  byte val; //next value
+  byte dis; // distance to match
+  byte len; // match length
+  byte val; // next value
 };
 
-static __global__ void prefixSumPopulate(int* const __restrict__ prefix, const triple* const __restrict__ input, const int insize)
-{
+static __global__ void prefixSumPopulate(int *const __restrict__ prefix,
+                                         const triple *const __restrict__ input,
+                                         const int insize) {
   // 2. Populate prefix sum array
   const int idx = threadIdx.x + blockIdx.x * ThreadsPerBlock;
   if (idx < insize) {
@@ -76,8 +85,10 @@ static __global__ void prefixSumPopulate(int* const __restrict__ prefix, const t
   }
 }
 
-static __global__ void populateParentArray(int* const __restrict__ parent, const int* const __restrict__ prefix, const triple* const __restrict__ input, const int insize)
-{
+static __global__ void
+populateParentArray(int *const __restrict__ parent,
+                    const int *const __restrict__ prefix,
+                    const triple *const __restrict__ input, const int insize) {
   // 4. Use prefix sum to populate parent array
   const int idx = threadIdx.x + blockIdx.x * ThreadsPerBlock;
   if (idx < insize) {
@@ -96,8 +107,8 @@ static __global__ void populateParentArray(int* const __restrict__ parent, const
 }
 
 // Find operation
-static inline __device__ int find(const int idx, volatile int* const __restrict__ parent)
-{
+static inline __device__ int find(const int idx,
+                                  volatile int *const __restrict__ parent) {
   int curr = parent[idx];
   if (curr >= offset) {
     int prev = idx;
@@ -111,8 +122,9 @@ static inline __device__ int find(const int idx, volatile int* const __restrict_
   return curr;
 }
 
-static __global__ void populateOuput(byte* const __restrict__ output,  int* const __restrict__ parent, const int origLength)
-{
+static __global__ void populateOuput(byte *const __restrict__ output,
+                                     int *const __restrict__ parent,
+                                     const int origLength) {
   // 5. Populate output by union find
   const int idx = threadIdx.x + blockIdx.x * ThreadsPerBlock;
   if (idx < origLength) {
@@ -120,8 +132,7 @@ static __global__ void populateOuput(byte* const __restrict__ output,  int* cons
   }
 }
 
-static void CheckCuda()
-{
+static void CheckCuda() {
   cudaError_t e;
   cudaDeviceSynchronize();
   if (cudaSuccess != (e = cudaGetLastError())) {
@@ -130,33 +141,48 @@ static void CheckCuda()
   }
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   printf("LZ77 (%s)\n", __FILE__);
 
-  if (argc != 3) {printf("USAGE: %s input_file_name output_file_name\n", argv[0]);  exit(-1);}
+  if (argc != 3) {
+    printf("USAGE: %s input_file_name output_file_name\n", argv[0]);
+    exit(-1);
+  }
 
   // 1. Read input
-  FILE* const fin = fopen(argv[1], "rb");  assert(fin != NULL);
+  FILE *const fin = fopen(argv[1], "rb");
+  assert(fin != NULL);
   fseek(fin, 0, SEEK_END);
-  long size = ftell(fin);  assert(size > 0);
+  long size = ftell(fin);
+  assert(size > 0);
   long setSize = (size - sizeof(long)) / sizeof(triple);
-  triple* const input = new triple [setSize];
+  triple *const input = new triple[setSize];
   fseek(fin, 0, SEEK_SET);
   long origLength;
-  long readElms = fread(&origLength, sizeof(long), 1, fin); assert(readElms == 1);
-  if (origLength > INT_MAX) {printf("ERROR: the input file is too large for INT_MAX\n");  exit(-1);}
-  const long insize = fread(input, (long)sizeof(triple), setSize, fin);  assert(insize == setSize);
-  if (insize > INT_MAX) {printf("ERROR: the encoded file is too large for INT_MAX\n");  exit(-1);}
+  long readElms = fread(&origLength, sizeof(long), 1, fin);
+  assert(readElms == 1);
+  if (origLength > INT_MAX) {
+    printf("ERROR: the input file is too large for INT_MAX\n");
+    exit(-1);
+  }
+  const long insize = fread(input, (long)sizeof(triple), setSize, fin);
+  assert(insize == setSize);
+  if (insize > INT_MAX) {
+    printf("ERROR: the encoded file is too large for INT_MAX\n");
+    exit(-1);
+  }
   fclose(fin);
-  if (insize == 0) {printf("ERROR: input file is empty\n");  exit(-1);}
+  if (insize == 0) {
+    printf("ERROR: input file is empty\n");
+    exit(-1);
+  }
 
   // PLEASE NOTE: switching longs to int from here down....
 
   // Create prefix array, parent, & d_ variables
-  int* d_prefix;
-  int* d_parent;
-  triple* d_input;
+  int *d_prefix;
+  int *d_parent;
+  triple *d_input;
 
   // Allocate variables
   mallocOnGPU(d_prefix, sizeof(int) * insize);
@@ -167,54 +193,67 @@ int main(int argc, char* argv[])
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, device);
   const int SMs = deviceProp.multiProcessorCount;
-  printf("GPU: %s with %d SMs (%.1f MHz core and %.1f MHz mem)\n", deviceProp.name, SMs, deviceProp.clockRate * 0.001, deviceProp.memoryClockRate * 0.001);
-  
+  printf("GPU: %s with %d SMs (%.1f MHz core and %.1f MHz mem)\n",
+         deviceProp.name, SMs, deviceProp.clockRate * 0.001,
+         deviceProp.memoryClockRate * 0.001);
+
   // Create output array
-  byte* const output = new byte [origLength];
-  byte* d_output;
-  mallocOnGPU(d_output, sizeof(byte) * origLength);  
-  
-  //Timer start_total
+  byte *const output = new byte[origLength];
+  byte *d_output;
+  mallocOnGPU(d_output, sizeof(byte) * origLength);
+
+  // Timer start_total
   timeval start, end, start_total, end_total;
   gettimeofday(&start_total, NULL);
-  
+
   // Initialize variables
   copyToGPU(d_input, input, sizeof(triple) * setSize);
 
   // Determine temporary device storage requirements for inclusive prefix sum
   void *d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
-  
+
   gettimeofday(&start, NULL);
   // 2. Populate prefix sum array
-  prefixSumPopulate<<<(insize + ThreadsPerBlock - 1) / ThreadsPerBlock, ThreadsPerBlock>>>(d_prefix, d_input, insize);
-  // 3. Compute prefix sum array - https://nvlabs.github.io/cub/structcub_1_1_device_scan.html
-  // Determine temporary device storage requirements for inclusive prefix sum
-  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, d_prefix, d_prefix, insize);
+  prefixSumPopulate<<<(insize + ThreadsPerBlock - 1) / ThreadsPerBlock,
+                      ThreadsPerBlock>>>(d_prefix, d_input, insize);
+  // 3. Compute prefix sum array -
+  // https://nvlabs.github.io/cub/structcub_1_1_device_scan.html Determine
+  // temporary device storage requirements for inclusive prefix sum
+  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, d_prefix,
+                                d_prefix, insize);
   // Allocate temporary storage for inclusive prefix sum
   mallocOnGPU(d_temp_storage, temp_storage_bytes);
   // Run inclusive prefix sum
-  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, d_prefix, d_prefix, insize);
+  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, d_prefix,
+                                d_prefix, insize);
   // 4. Use prefix sum to populate parent array
-  populateParentArray<<<(insize + ThreadsPerBlock - 1) / ThreadsPerBlock, ThreadsPerBlock>>>(d_parent, d_prefix, d_input, insize);
+  populateParentArray<<<(insize + ThreadsPerBlock - 1) / ThreadsPerBlock,
+                        ThreadsPerBlock>>>(d_parent, d_prefix, d_input, insize);
   // 5. Populate output by union find
-  populateOuput<<<(origLength + ThreadsPerBlock - 1) / ThreadsPerBlock, ThreadsPerBlock>>>(d_output, d_parent, origLength);
+  populateOuput<<<(origLength + ThreadsPerBlock - 1) / ThreadsPerBlock,
+                  ThreadsPerBlock>>>(d_output, d_parent, origLength);
 
   cudaDeviceSynchronize();
   gettimeofday(&end, NULL);
-  printf("GPU runtime: %.6f s\n", end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
+  printf("GPU runtime: %.6f s\n",
+         end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
 
   // Get result from GPU
-  //CheckCuda();
+  // CheckCuda();
   copyFromGPU(output, d_output, sizeof(byte) * origLength);
-  
-  //Timer stop_total
+
+  // Timer stop_total
   gettimeofday(&end_total, NULL);
-  printf("Total runtime: %.6f s\n", end_total.tv_sec - start_total.tv_sec + (end_total.tv_usec - start_total.tv_usec) / 1000000.0);
-  
+  printf("Total runtime: %.6f s\n",
+         end_total.tv_sec - start_total.tv_sec +
+             (end_total.tv_usec - start_total.tv_usec) / 1000000.0);
+
   // 6. Write output
-  FILE* const fout = fopen(argv[2], "wb");  assert(fout != NULL);
-  size = fwrite(output, sizeof(byte), origLength, fout);  assert(size == origLength);
+  FILE *const fout = fopen(argv[2], "wb");
+  assert(fout != NULL);
+  size = fwrite(output, sizeof(byte), origLength, fout);
+  assert(size == origLength);
   fclose(fout);
 
   // Clean up

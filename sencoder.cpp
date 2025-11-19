@@ -33,9 +33,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <cstdlib>
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <sys/time.h>
 
 typedef unsigned char byte;
@@ -43,49 +43,59 @@ typedef unsigned char byte;
 static const int MAXLEN = 256;
 
 struct triple {
-  byte dis; //distance to match
-  byte len; //match length
-  byte val; //next value
+  byte dis; // distance to match
+  byte len; // match length
+  byte val; // next value
 };
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   printf("LZ77 encoder (%s)\n", __FILE__);
-  if (argc != 3) {printf("USAGE: %s input_file_name output_file_name\n", argv[0]);  exit(-1);}
+  if (argc != 3) {
+    printf("USAGE: %s input_file_name output_file_name\n", argv[0]);
+    exit(-1);
+  }
 
   // Read input
-  FILE* const fin = fopen(argv[1], "rb");  assert(fin != NULL);
+  FILE *const fin = fopen(argv[1], "rb");
+  assert(fin != NULL);
   fseek(fin, 0, SEEK_END);
-  long size = ftell(fin);  assert(size > 0);
-  byte* const input = new byte [size];
+  long size = ftell(fin);
+  assert(size > 0);
+  byte *const input = new byte[size];
   fseek(fin, 0, SEEK_SET);
-  const long insize = fread(input, sizeof(byte), size, fin);  assert(insize == size);
+  const long insize = fread(input, sizeof(byte), size, fin);
+  assert(insize == size);
   fclose(fin);
-  if (insize == 0) {printf("ERROR: input file is empty\n");  exit(-1);}
+  if (insize == 0) {
+    printf("ERROR: input file is empty\n");
+    exit(-1);
+  }
 
   // Create output
-  triple* const output = new triple [insize];  // upper bound
+  triple *const output = new triple[insize]; // upper bound
   long outsize = 0;
-  
+
   // Timer
   timeval start, end;
   gettimeofday(&start, NULL);
-  
-  //1. Iterate through input
+
+  // 1. Iterate through input
   long cur = 0;
   while (cur < insize) {
-    //2. Find Matches
+    // 2. Find Matches
     long maxlen = 0;
     long maxidx;
     long pos = cur - 1;
     while ((cur - pos < MAXLEN) && (pos >= 0)) {
       if (input[pos] == input[cur]) {
         long len = 1;
-        //3. Find longest match
-        while ((len <= MAXLEN) && (cur + len < insize) && (input[pos + len] == input[cur + len])) {
+        // 3. Find longest match
+        while ((len <= MAXLEN) && (cur + len < insize) &&
+               (input[pos + len] == input[cur + len])) {
           len++;
         }
-        if (maxlen <= len) { //will save the largest or farthest within the window
+        if (maxlen <=
+            len) { // will save the largest or farthest within the window
           maxlen = len;
           maxidx = pos;
         }
@@ -93,7 +103,7 @@ int main(int argc, char* argv[])
       pos--;
     }
 
-    //4. Store triple in output
+    // 4. Store triple in output
     if (maxlen < 2) {
       output[outsize].dis = 0;
       output[outsize].val = (cur < insize) ? input[cur] : 0;
@@ -110,19 +120,24 @@ int main(int argc, char* argv[])
     outsize++;
   }
   gettimeofday(&end, NULL);
-  printf("CPU runtime: %.6f s\n", end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
+  printf("CPU runtime: %.6f s\n",
+         end.tv_sec - start.tv_sec + (end.tv_usec - start.tv_usec) / 1000000.0);
 
   // Write output
-  FILE* const fout = fopen(argv[2], "wb");  assert(fout != NULL);
-  size = fwrite(&insize, sizeof(long), 1, fout);  assert(1 == size);
-  size = fwrite(output, sizeof(triple), outsize, fout);  assert(outsize == size);
+  FILE *const fout = fopen(argv[2], "wb");
+  assert(fout != NULL);
+  size = fwrite(&insize, sizeof(long), 1, fout);
+  assert(1 == size);
+  size = fwrite(output, sizeof(triple), outsize, fout);
+  assert(outsize == size);
   fclose(fout);
 
   // Print compression ratio
-  printf("compression ratio: %.3f\n", 1.0 * insize / (sizeof(long) + sizeof(triple) * outsize));
+  printf("compression ratio: %.3f\n",
+         1.0 * insize / (sizeof(long) + sizeof(triple) * outsize));
 
   // Clean up
-  delete [] input;
-  delete [] output;
+  delete[] input;
+  delete[] output;
   return 0;
 }
